@@ -160,6 +160,7 @@ class YoubotTrajectoryPlanning(Node):
         """
         num_checkpoints = checkpoints_tf.shape[2]
         # TODO: implement this method. Make it flexible to accomodate different numbers of targets.
+        # the purpose is to find the order visiting all checkpoints from start point that results in the minimum travel distance.
         # Your code starts here ------------------------------
         checkpoint_indices = list(range(1, num_checkpoints))  # Exclude the starting point (index 0)
         min_dist = float('inf')
@@ -233,6 +234,7 @@ class YoubotTrajectoryPlanning(Node):
         # TODO: implement this
         # Your code starts here ------------------------------
         full_checkpoint_tfs = []
+        # add the first checkpoint
         full_checkpoint_tfs.append(target_checkpoint_tfs[:, :, sorted_checkpoint_idx[0]])
         #self.get_logger().info(f"full_checkpoint_tfs.shape: {full_checkpoint_tfs.shape}")
         for i in range(len(sorted_checkpoint_idx) - 1):
@@ -240,13 +242,16 @@ class YoubotTrajectoryPlanning(Node):
             idx_b = sorted_checkpoint_idx[i + 1]
             checkpoint_a_tf = target_checkpoint_tfs[:, :, idx_a]
             checkpoint_b_tf = target_checkpoint_tfs[:, :, idx_b]
+            # produce intermediate points between two checkpoints
             intermediate_tfs = self.decoupled_rot_and_trans(checkpoint_a_tf, checkpoint_b_tf, num_points)
             self.get_logger().info(f"intermediate_tfs.shape: {intermediate_tfs.shape}")
+            # store intermediate points
             for k in range(intermediate_tfs.shape[2]):
                 full_checkpoint_tfs.append(intermediate_tfs[:, :, k])
+            # store the end checkpoint
             full_checkpoint_tfs.append(checkpoint_b_tf)
             #self.get_logger().info(f"full_checkpoint_tfs.shape: {full_checkpoint_tfs.shape}")
-        full_checkpoint_tfs = np.stack(full_checkpoint_tfs, axis=2) 
+        full_checkpoint_tfs = np.stack(full_checkpoint_tfs, axis=2) # 4x4x(4xnum_points + (initial_point(1) + num_targets(example:4)))
         self.get_logger().info(f"full_checkpoint_tfs.shape: {full_checkpoint_tfs.shape}")
         # Your code ends here ------------------------------
 
@@ -271,10 +276,13 @@ class YoubotTrajectoryPlanning(Node):
         # Your code starts here ------------------------------
         tfs = np.repeat(np.identity(4), num_points, axis=1).reshape((4, 4, num_points))
         # # slerp = Slerp([0.0, 1.0], R.from_matrix(np.stack([checkpoint_a_tf[0:3,0:3], checkpoint_b_tf[0:3,0:3]])))
-
+        #Straight Line Paths– Cartesian space
         for i in range(num_points):
+            # produce intermediate points excluding start and end points
             t = (i + 1) / (num_points + 1)
+            # translation interpolation
             tfs[0:3, 3, i] = (1 - t) * checkpoint_a_tf[0:3, 3] + t * checkpoint_b_tf[0:3, 3]
+            # rotation interpolation
             Rs = checkpoint_a_tf[0:3, 0:3]
             Rf = checkpoint_b_tf[0:3, 0:3]
             R_delta = Rs.T @ Rf
@@ -300,6 +308,7 @@ class YoubotTrajectoryPlanning(Node):
         """
         # TODO: Implement this
         # Your code starts here ------------------------------
+        # cartesian to joint space
         num_checkpoints = full_checkpoint_tfs.shape[2]
         q_checkpoints = np.zeros((5, num_checkpoints))
         q_checkpoints[:, 0] = init_joint_position
@@ -328,7 +337,7 @@ class YoubotTrajectoryPlanning(Node):
         # Your code starts here ------------------------------
         q = q0.copy()
         error = 0.0
-
+        #Iterative Approach
         for k in range(num):
             # Compute the current end-effector pose
             current_pose = self.kdl_youbot.forward_kinematics(q.tolist())
@@ -343,6 +352,7 @@ class YoubotTrajectoryPlanning(Node):
             # Compute the Jacobian
             J = self.kdl_youbot.get_jacobian(q.tolist())
             Jv = J[0:3, :]
+            # iterative optimization equations -Pseudoinverse
             J_inv = np.linalg.pinv(Jv)
 
             # Update the joint angles

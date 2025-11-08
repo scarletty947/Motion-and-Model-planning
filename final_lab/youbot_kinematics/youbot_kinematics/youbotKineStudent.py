@@ -112,6 +112,7 @@ class YoubotKinematicStudent(YoubotKinematicBase):
         assert isinstance(joint, list)
         assert len(joint) == 5
         # Your code starts here ----------------------------
+        #At singular configurations of any robot, the Jacobian is rank deficient.
         J = self.get_jacobian(joint)
         rank_J = np.linalg.matrix_rank(J)
         singularity = (rank_J < 5)

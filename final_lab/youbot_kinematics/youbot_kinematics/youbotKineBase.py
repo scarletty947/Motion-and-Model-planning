@@ -9,6 +9,7 @@ from geometry_msgs.msg import TransformStamped, Quaternion
 from trajectory_msgs.msg import JointTrajectory
 
 # TODO: Ensure this library is findable and the method is implemented
+# just copy the transform_helpers folder from lab1submission into the final_lab folder
 from transform_helpers.utils import rotmat2q
 
 class YoubotKinematicBase(Node):
@@ -145,9 +146,14 @@ class YoubotKinematicBase(Node):
         rotation.
         """
         assert isinstance(T, np.ndarray)
+        # the definition of this function is a little ambiguous, as the return vector includes both position
+        # and rotation but T is only a rotation matrix. Also, I cannot understand p represented by 8 elements. 
+        # From lectures, we assume that p is a 6-element vector with first 3 for position and last 3 for rotation.
 
         # TODO: Implement a method to convert from a rotation matrix to a rodrigues vector
         q = rotmat2q(T[0:3, 0:3])
+        # x_e = [p_e, r_e]  r=theta*axis
+        # theta = 2*arccos(q.w), u_x = q.x/sin(theta/2)
         angle = 2 * np.arccos(q.w)
         if angle == 0:
             r = np.array([0.0, 0.0, 0.0])
@@ -157,6 +163,7 @@ class YoubotKinematicBase(Node):
             ry = q.y / s
             rz = q.z / s
             r = angle * np.array([rx, ry, rz])
+        
         p = np.zeros(6)
         p[0:3] = T[0:3, 3]
         p[3:6] = r
